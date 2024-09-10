@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Assistant IA",
   description: "Asistente de reunion con IA",
-  metadataBase: new URL('https://estudiantes-2.vercel.app/'),
+  metadataBase: new URL('https://estudiantes-2.vercel.app'),
   themeColor: '#ffffff',
 };
 // @ts-ignore
