@@ -28,7 +28,7 @@ const VoiceRecorder: React.FC = () => {
   useEffect(() => {
     if (isSignedIn && user) {
       const storedCredits = localStorage.getItem(`credits_${user.id}`);
-      setCredits(storedCredits ? parseInt(storedCredits) : 10);
+      setCredits(storedCredits ? parseInt(storedCredits) : 3);
     }
   }, [isSignedIn, user]);
 
