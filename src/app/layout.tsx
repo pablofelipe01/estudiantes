@@ -2,13 +2,27 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import "./globals.css";
-import Head from 'next/head';
+import { ClerkProvider } from '@clerk/nextjs';
+import Script from 'next/script';
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Assistant IA",
   description: "Asistente de reunion con IA",
+  metadataBase: new URL('http://localhost:3000'),
+  themeColor: '#ffffff',
+};
+// @ts-ignore
+export const headers = {
+  'Content-Security-Policy': `
+    default-src 'self';
+    script-src 'self' https://js.stripe.com https://m.stripe.network 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' https://m.stripe.network 'unsafe-inline';
+    img-src 'self' https://m.stripe.network https://m.stripe.com https://b.stripecdn.com https://cdn.jsdelivr.net;
+    connect-src 'self' https://api.stripe.com;
+    frame-src 'self' https://js.stripe.com https://hooks.stripe.com;
+  `.replace(/\s{2,}/g, ' ').trim()
 };
 
 export default function RootLayout({
@@ -17,11 +31,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <Head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-      <body className={inter.className}>{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body className={inter.className}>
+        <video autoPlay muted loop className="video-background">
+            <source src="/video1.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+          <main className="flex min-h-screen flex-col items-center justify-between p-24">
+            {children}
+          </main>
+          <Script
+            src="https://js.stripe.com/v3/"
+            strategy="lazyOnload"
+          />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

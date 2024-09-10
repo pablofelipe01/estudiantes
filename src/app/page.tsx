@@ -1,29 +1,20 @@
 "use client";
+
 import VoiceRecorder from "../../components/VoiceRecorder";
+import Footer from "../../components/Footer";
 
 export default function Home() {
   return (
-    <div
-      // style={{
-      //   display: "flex",
-      //   height: "100vh",
-      //   alignItems: "center",
-      //   justifyContent: "center",
-      //   flexDirection: "column",
-      //   textAlign: "center",
-      // }}
-    >
-    
-      <div
-        style={{
-          padding: "20px",
-          backgroundColor: "#000000",
-          borderRadius: "10px",
-          boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
-        }}
-      >
-        <VoiceRecorder />
-      </div>
+    <div className="flex flex-col min-h-screen">
+      <main className="flex-grow">
+        <div className="container mx-auto px-4 py-8">
+        
+          <div >
+            <VoiceRecorder />
+          </div>
+        </div>
+      </main>
+      <Footer />
     </div>
   );
 }

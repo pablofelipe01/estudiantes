@@ -1,17 +1,18 @@
-"use client";
-
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useUser, useClerk } from "@clerk/nextjs";
+import BuyCreditsButton from "./BuyCreditsButton";
+import { useRouter } from 'next/navigation';
 
 const VoiceRecorder: React.FC = () => {
+  const { user, isLoaded, isSignedIn } = useUser();
+  const { signOut } = useClerk();
+  const router = useRouter();
+  const [credits, setCredits] = useState<number>(0);
   const [estaGrabando, setEstaGrabando] = useState<boolean>(false);
   const [urlAudio, setUrlAudio] = useState<string | null>(null);
-  const [nombreArchivo, setNombreArchivo] = useState<string>("Test 1");
   const [email, setEmail] = useState<string>("");
   const [emailSubject, setEmailSubject] = useState<string>("");
   const [cargando, setCargando] = useState<boolean>(false);
-  const [cargandoEmail, setCargandoEmail] = useState<boolean>(false);
-  const [cargandoCalendario, setCargandoCalendario] = useState<boolean>(false);
-  const [cargandoToDo, setCargandoToDo] = useState<boolean>(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -19,37 +20,79 @@ const VoiceRecorder: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const requestAnimationFrameRef = useRef<number | null>(null);
 
+  const openHowItWorksVideo = () => {
+    // Replace 'VIDEO_ID' with the actual YouTube video ID
+    window.open('https://www.youtube.com/watch?v=VIDEO_ID', '_blank');
+  };
+
+  useEffect(() => {
+    if (isSignedIn && user) {
+      const storedCredits = localStorage.getItem(`credits_${user.id}`);
+      setCredits(storedCredits ? parseInt(storedCredits) : 10);
+    }
+  }, [isSignedIn, user]);
+
+  const goToHome = (e: React.MouseEvent) => {
+    e.preventDefault();
+    router.push('/');
+  };
+
+  const deductCredit = () => {
+    if (credits > 0) {
+      const newCredits = credits - 1;
+      setCredits(newCredits);
+      localStorage.setItem(`credits_${user.id}`, newCredits.toString());
+      return true;
+    }
+    return false;
+  };
+
+  const addCredits = (amount: number) => {
+    const newCredits = credits + amount;
+    setCredits(newCredits);
+    localStorage.setItem(`credits_${user.id}`, newCredits.toString());
+  };
+
   const iniciarGrabacion = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // @ts-ignore
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    audioContextRef.current = audioContext;
+    if (credits <= 0) {
+      alert("You're out of credits. Please purchase more to continue.");
+      return;
+    }
 
-    const source = audioContext.createMediaStreamSource(stream);
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-    analyserRef.current = analyser;
+    if (deductCredit()) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // @ts-ignore
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioContext;
 
-    source.connect(analyser);
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyserRef.current = analyser;
 
-    const mediaRecorder = new MediaRecorder(stream);
-    mediaRecorderRef.current = mediaRecorder;
+      source.connect(analyser);
 
-    mediaRecorder.ondataavailable = (event: BlobEvent) => {
-      audioChunksRef.current.push(event.data);
-    };
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
 
-    mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
-      const url = URL.createObjectURL(audioBlob);
-      setUrlAudio(url);
-      audioChunksRef.current = [];
-    };
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
+        audioChunksRef.current.push(event.data);
+      };
 
-    mediaRecorder.start();
-    setEstaGrabando(true);
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        const url = URL.createObjectURL(audioBlob);
+        setUrlAudio(url);
+        audioChunksRef.current = [];
+      };
 
-    dibujarFormaDeOnda();
+      mediaRecorder.start();
+      setEstaGrabando(true);
+
+      dibujarFormaDeOnda();
+    } else {
+      alert("Failed to deduct credit. Please try again.");
+    }
   };
 
   const detenerGrabacion = () => {
@@ -103,13 +146,11 @@ const VoiceRecorder: React.FC = () => {
     draw();
   };
 
-  const enviarAlWebhook = async (audioBlob: Blob, webhookUrl: string, isEmail: boolean) => {
+  const enviarAlWebhook = async (audioBlob: Blob, webhookUrl: string) => {
     const formData = new FormData();
-    formData.append('file', audioBlob, `${nombreArchivo}.wav`);
+    formData.append('file', audioBlob, `${email}.wav`);
     formData.append('email', email);
-    if (isEmail) {
-      formData.append('subject', emailSubject);
-    }
+    formData.append('subject', emailSubject);
 
     try {
       const response = await fetch(webhookUrl, {
@@ -125,51 +166,14 @@ const VoiceRecorder: React.FC = () => {
     }
   };
 
-  const recargarPagina = () => {
-    window.location.reload();
-  };
-
-  const manejarDescarga = async () => {
+  const manejarMeeting = async () => {
     if (urlAudio) {
       setCargando(true);
       const response = await fetch(urlAudio);
       const audioBlob = await response.blob();
-      await enviarAlWebhook(audioBlob, 'https://hook.us2.make.com/44y6brd1r5ixmctjkiijt9c946vbrjeq', false);
+      await enviarAlWebhook(audioBlob, 'https://hook.us2.make.com/yeee5n2th6mxjj0twi1uneujraqf1kud');
       setCargando(false);
-      recargarPagina();
-    }
-  };
-
-  const manejarEnvioEmail = async () => {
-    if (urlAudio) {
-      setCargandoEmail(true);
-      const response = await fetch(urlAudio);
-      const audioBlob = await response.blob();
-      await enviarAlWebhook(audioBlob, 'https://hook.us2.make.com/bfh9n564p81snvtergwvw7ekm6vk7f1e', true);
-      setCargandoEmail(false);
-      recargarPagina();
-    }
-  };
-
-  const manejarEnvioCalendario = async () => {
-    if (urlAudio) {
-      setCargandoCalendario(true);
-      const response = await fetch(urlAudio);
-      const audioBlob = await response.blob();
-      await enviarAlWebhook(audioBlob, 'https://hook.us2.make.com/howh6egekmexzxv4add7k8a6uiozft3s', false);
-      setCargandoCalendario(false);
-      recargarPagina();
-    }
-  };
-
-  const manejarEnvioToDo = async () => {
-    if (urlAudio) {
-      setCargandoToDo(true);
-      const response = await fetch(urlAudio);
-      const audioBlob = await response.blob();
-      await enviarAlWebhook(audioBlob, 'https://hook.us2.make.com/6270ep5hu57b6x74qlf5y4pzp3nkrxb8', false);
-      setCargandoToDo(false);
-      recargarPagina();
+      window.location.reload();
     }
   };
 
@@ -181,25 +185,70 @@ const VoiceRecorder: React.FC = () => {
     </div>
   );
 
+  if (!isLoaded) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen p-8 text-center">
+      <div className="bg-white bg-opacity-20 backdrop-blur-sm p-10 rounded-3xl shadow-2xl max-w-lg w-full transform hover:scale-105 transition-all duration-300">
+        <h1 className="text-4xl font-extrabold text-indigo-600 mb-6">Class Notes AI</h1>
+        <p className="text-xl text-gray-700 mb-8 leading-relaxed">
+          Transform your lectures into smart, organized notes with the power of AI
+        </p>
+        <div className="flex space-x-4">
+      <button 
+        onClick={() => window.location.href = "/sign-in"}
+        className="px-8 py-3 bg-indigo-600 text-white text-lg font-semibold rounded-full shadow-xl hover:bg-indigo-700 transform hover:scale-105 transition-all duration-300"
+      >
+        Get Started
+      </button>
+      <button 
+        onClick={openHowItWorksVideo}
+        className="px-8 py-3 bg-green-500 text-white text-lg font-semibold rounded-full shadow-xl hover:bg-green-600 transform hover:scale-105 transition-all duration-300"
+      >
+        How It Works
+      </button>
+    </div>
+      </div>
+    </div>
+    );
+  }
+
   return (
     <div
       className="flex items-center justify-center min-h-screen w-full"
-      style={{
-        backgroundImage: "url('/Assitant.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        borderRadius: '10px',
-        width: "100%",
-        height: "100vh",
-        margin: 0,
-        padding: 20,
-      }}
+      
     >
       <div className="p-4 max-w-md w-full bg-white bg-opacity-25 rounded-lg shadow-lg">
-        <h1 style={{ fontSize: "3rem", marginBottom: "20px", textAlign: "center", color: "black", fontWeight: "bold" }}>
-          🎙️ Assistant IA
+        <h1 className="text-4xl font-bold text-center mb-4 text-black">
+          🎙️ Class Notes AI
         </h1>
+      
+        
+        {/* Credits Card */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-4 flex items-center justify-between">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-yellow-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-gray-500">My Credits</p>
+              <p className="text-2xl font-bold text-gray-700">{credits}</p>
+            </div>
+          </div>
+          <BuyCreditsButton />
+        </div>
+        
+        <button onClick={() => signOut()} className="px-4 py-2 bg-red-500 text-white rounded-full shadow-lg mt-4 mb-4 w-full">
+          Sign Out
+        </button>
+        
         <canvas ref={canvasRef} width={300} height={80} className="w-full mb-4" />
         <div className="mb-6 flex flex-col space-y-4 items-center">
           <i className="fas fa-microphone-alt text-6xl mb-2" style={{ color: "black" }}></i>
@@ -208,101 +257,49 @@ const VoiceRecorder: React.FC = () => {
             disabled={estaGrabando}
             className="px-4 py-2 bg-green-500 text-white rounded-full shadow-lg disabled:bg-gray-400 w-full sm:w-auto transform transition-transform duration-200 active:scale-95"
           >
-            Iniciar
+            Start Recording
           </button>
           <button
             onClick={detenerGrabacion}
             disabled={!estaGrabando}
             className="px-4 py-2 bg-red-500 text-white rounded-full shadow-lg disabled:bg-gray-400 w-full sm:w-auto transform transition-transform duration-200 active:scale-95"
           >
-            Stop
+            Stop Recording
           </button>
           {urlAudio && (
             <>
               <input
-                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
                 className="px-2 py-1 border border-gray-300 rounded text-black w-full"
-                placeholder="Correo electrónico"
+                required
               />
               <input
-                id="emailSubject"
                 type="text"
                 value={emailSubject}
                 onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Class"
                 className="px-2 py-1 border border-gray-300 rounded text-black w-full"
-                placeholder="Asunto del correo"
+                required
               />
-              <select
-                id="nombreArchivo"
-                value={nombreArchivo}
-                onChange={(e) => setNombreArchivo(e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-black mt-2 w-full"
-              >
-                <option value="Test 1">Test 1</option>
-                <option value="Test 2">Test 2</option>
-                <option value="Test 3">Test 3</option>
-                <option value="Test 4">Test 4</option>
-                <option value="Test 5">Test 5</option>
-              </select>
               {cargando ? (
                 <div className="mt-4 flex justify-center">
                   <FuturisticSpinner />
                 </div>
               ) : (
                 <button
-                  onClick={manejarDescarga}
+                  onClick={manejarMeeting}
                   className="mt-4 inline-block px-4 py-2 bg-indigo-500 text-white rounded-full shadow-lg w-full text-center sm:w-auto transform transition-transform duration-200 active:scale-95"
                 >
-                  Meeting
+                  Process Meeting
                 </button>
               )}
-              {cargandoEmail ? (
-                <div className="mt-4 flex justify-center">
-                  <FuturisticSpinner />
-                </div>
-              ) : (
-                <button
-                  onClick={manejarEnvioEmail}
-                  className="mt-4 inline-block px-4 py-2 bg-blue-500 text-white rounded-full shadow-lg w-full text-center sm:w-auto transform transition-transform duration-200 active:scale-95"
-                >
-                  E-mail
-                </button>
-              )}
-              {cargandoCalendario ? (
-                <div className="mt-4 flex justify-center">
-                  <FuturisticSpinner />
-                </div>
-              ) : (
-                <button
-                  onClick={manejarEnvioCalendario}
-                  className="mt-4 inline-block px-4 py-2 bg-purple-500 text-white rounded-full shadow-lg w-full text-center sm:w-auto transform transition-transform duration-200 active:scale-95"
-                >
-                  Calendario
-                </button>
-              )}
-              {cargandoToDo ? (
-                <div className="mt-4 flex justify-center">
-                  <FuturisticSpinner />
-                </div>
-              ) : (
-                <button
-                  onClick={manejarEnvioToDo}
-                  className="mt-4 inline-block px-4 py-2 bg-pink-500 text-white rounded-full shadow-lg w-full text-center sm:w-auto transform transition-transform duration-200 active:scale-95"
-                >
-                  ToDo
-                </button>
-              )}
-              <button
-                onClick={recargarPagina}
-                className="px-4 py-2 bg-yellow-500 text-white rounded-full shadow-lg w-full sm:w-auto mt-4 transform transition-transform duration-200 active:scale-95"
-              >
-                Home
-              </button>
             </>
           )}
+          
+        
         </div>
         {urlAudio && (
           <div className="mt-6">
