@@ -25,7 +25,7 @@ const SuccessPage = () => {
           if (data.success) {
             // Add credits to the user's account
             const currentCredits = localStorage.getItem(`credits_${user.id}`);
-            const newCredits = (parseInt(currentCredits || "0") + 3).toString();
+            const newCredits = (parseInt(currentCredits || "0") + 20).toString();
             localStorage.setItem(`credits_${user.id}`, newCredits);
             setMessage("Payment successful! 20 credits have been added to your account.");
             // Redirect to home page after 3 seconds
